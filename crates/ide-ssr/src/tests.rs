@@ -1450,3 +1450,93 @@ fn replace_autoref_mut() {
         "#]],
     );
 }
+
+#[test]
+fn template_path_to_method_with_self_param() {
+    assert_ssr_transform(
+        "S::step($s) ==>> S::advance($s)",
+        r#"
+struct S;
+impl S {
+    fn step(&self) {}
+    fn advance(&self) {}
+}
+fn f(s: &S) {
+    S::step(s);
+}
+"#,
+        expect![[r#"
+struct S;
+impl S {
+    fn step(&self) {}
+    fn advance(&self) {}
+}
+fn f(s: &S) {
+    S::advance(s);
+}
+"#]],
+    );
+}
+
+#[test]
+fn template_method_call_form_works() {
+    // The same rule with the template in method call form gives edits.
+    assert_ssr_transform(
+        "S::step($s) ==>> $s.advance()",
+        r#"
+struct S;
+impl S {
+    fn step(&self) {}
+    fn advance(&self) {}
+}
+fn f(s: &S) {
+    S::step(s);
+}
+"#,
+        expect![[r#"
+struct S;
+impl S {
+    fn step(&self) {}
+    fn advance(&self) {}
+}
+fn f(s: &S) {
+    s.advance();
+}
+"#]],
+    );
+}
+
+#[test]
+fn template_path_to_method_with_self_param_not_in_scope() {
+    assert_ssr_transform(
+        "crate::a::S::step($s) ==>> crate::a::S::advance($s)",
+        r#"
+mod a {
+    pub struct S;
+    impl S {
+        pub fn step(&self) {}
+        pub fn advance(&self) {}
+    }
+}
+mod b {
+    fn f(s: &crate::a::S) {
+        s.step();
+    }
+}
+"#,
+        expect![[r#"
+            mod a {
+                pub struct S;
+                impl S {
+                    pub fn step(&self) {}
+                    pub fn advance(&self) {}
+                }
+            }
+            mod b {
+                fn f(s: &crate::a::S) {
+                    crate::a::S::advance(&*s);
+                }
+            }
+        "#]],
+    );
+}

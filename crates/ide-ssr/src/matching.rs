@@ -667,7 +667,10 @@ impl Match {
                     allow_unstable: true,
                 };
                 let mod_path = module.find_path(sema.db, module_def, cfg).ok_or_else(|| {
-                    match_error!("Failed to render template path `{}` at match location")
+                    match_error!(
+                        "Failed to render template path `{}` at match location",
+                        path.text()
+                    )
                 })?;
                 self.rendered_template_paths.insert(path.clone(), mod_path);
             }

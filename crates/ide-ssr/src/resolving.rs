@@ -52,9 +52,13 @@ impl<'db> ResolvedRule<'db> {
             let resolver = Resolver {
                 resolution_scope,
                 placeholders_by_stand_in: rule.placeholders_by_stand_in,
+                in_template: false,
             };
             let resolved_template = match rule.template {
-                Some(template) => Some(resolver.resolve_pattern_tree(template)?),
+                Some(template) => Some(
+                    Resolver { in_template: true, ..resolver.clone() }
+                        .resolve_pattern_tree(template)?,
+                ),
                 None => None,
             };
             Ok(ResolvedRule {
@@ -73,9 +77,12 @@ impl<'db> ResolvedRule<'db> {
     }
 }
 
+#[derive(Clone)]
 struct Resolver<'a, 'db> {
     resolution_scope: &'a ResolutionScope<'db>,
     placeholders_by_stand_in: FxHashMap<SmolStr, parsing::Placeholder>,
+    /// A template is only rendered, never matched, so it doesn't need method resolutions.
+    in_template: bool,
 }
 
 impl<'db> Resolver<'_, 'db> {
@@ -170,7 +177,9 @@ impl<'db> Resolver<'_, 'db> {
             hir::PathResolution::Def(hir::ModuleDef::Function(function))
                 if function.as_assoc_item(self.resolution_scope.scope.db).is_some() =>
             {
-                if function.self_param(self.resolution_scope.scope.db).is_some() {
+                if !self.in_template
+                    && function.self_param(self.resolution_scope.scope.db).is_some()
+                {
                     // If we don't use this path resolution, then we won't be able to match method
                     // calls. e.g. `Foo::bar($s)` should match `x.bar()`.
                     true
