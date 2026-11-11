@@ -1450,3 +1450,60 @@ fn replace_autoref_mut() {
         "#]],
     );
 }
+
+#[test]
+fn template_path_to_method_with_self_param() {
+    // FIXME: fails with "No edits were made". The pattern matches `S::step(s)`, but the
+    // template path `S::advance` cannot be rendered at the match location.
+    assert_ssr_transform(
+        "S::step($s) ==>> S::advance($s)",
+        r#"
+struct S;
+impl S {
+    fn step(&self) {}
+    fn advance(&self) {}
+}
+fn f(s: &S) {
+    S::step(s);
+}
+"#,
+        expect![[r#"
+struct S;
+impl S {
+    fn step(&self) {}
+    fn advance(&self) {}
+}
+fn f(s: &S) {
+    S::advance(s);
+}
+"#]],
+    );
+}
+
+#[test]
+fn template_method_call_form_works() {
+    // The same rule with the template in method call form gives edits.
+    assert_ssr_transform(
+        "S::step($s) ==>> $s.advance()",
+        r#"
+struct S;
+impl S {
+    fn step(&self) {}
+    fn advance(&self) {}
+}
+fn f(s: &S) {
+    S::step(s);
+}
+"#,
+        expect![[r#"
+struct S;
+impl S {
+    fn step(&self) {}
+    fn advance(&self) {}
+}
+fn f(s: &S) {
+    s.advance();
+}
+"#]],
+    );
+}
